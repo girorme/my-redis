@@ -5,27 +5,31 @@ defmodule Server do
 
   use Application
 
+  require Logger
+
   def start(_type, _args) do
-    Supervisor.start_link([{Task, fn -> Server.listen() end}], strategy: :one_for_one)
+    port = 6379
+    IO.puts("Starting redis server on port: #{port}")
+
+    # # Since the tester restarts your program quite often, setting SO_REUSEADDR
+    # # ensures that we don't run into 'Address already in use' errors
+    {:ok, socket} = :gen_tcp.listen(port, [:binary, active: true, reuseaddr: true])
+    Supervisor.start_link([{Task, fn -> Server.accept(socket) end}], strategy: :one_for_one)
   end
 
   @doc """
   Listen for incoming connections
   """
-  def listen(port \\ 6379) do
-    IO.puts("Starting redis server on port: #{port}")
+  def accept(socket) do
+    case :gen_tcp.accept(socket) do
+      {:ok, client_socket} ->
+        {:ok, pid} = GenServer.start(Handler, %{socket: client_socket})
+        :gen_tcp.controlling_process(client_socket, pid)
 
-    # # Since the tester restarts your program quite often, setting SO_REUSEADDR
-    # # ensures that we don't run into 'Address already in use' errors
-    {:ok, socket} = :gen_tcp.listen(port, [:binary, active: false, reuseaddr: true])
-    {:ok, client} = :gen_tcp.accept(socket)
+      err ->
+        Logger.error(err)
+    end
 
-    IO.puts("Redis connection received... Waiting data")
-
-    {:ok, data} = :gen_tcp.recv(client, 0)
-
-    IO.puts("Received: #{data}")
-
-    :gen_tcp.send(client, "+PONG\r\n")
+    accept(socket)
   end
 end
