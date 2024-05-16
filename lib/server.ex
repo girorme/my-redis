@@ -12,10 +12,20 @@ defmodule Server do
   @doc """
   Listen for incoming connections
   """
-  def listen() do
+  def listen(port \\ 6379) do
+    IO.puts("Starting redis server on port: #{port}")
+
     # # Since the tester restarts your program quite often, setting SO_REUSEADDR
     # # ensures that we don't run into 'Address already in use' errors
-    {:ok, socket} = :gen_tcp.listen(6379, [:binary, active: false, reuseaddr: true])
-    {:ok, _client} = :gen_tcp.accept(socket)
+    {:ok, socket} = :gen_tcp.listen(port, [:binary, active: false, reuseaddr: true])
+    {:ok, client} = :gen_tcp.accept(socket)
+
+    IO.puts("Redis connection received... Waiting data")
+
+    {:ok, data} = :gen_tcp.recv(client, 0)
+
+    IO.puts("Received: #{data}")
+
+    :gen_tcp.send(client, "+PONG\r\n")
   end
 end
